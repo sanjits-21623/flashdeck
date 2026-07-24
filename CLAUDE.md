@@ -134,14 +134,19 @@ cards:  id (uuid, pk, defaultRandom) | deckId (uuid, fk → decks.id, onDelete c
         | front (text, notNull) | back (text, notNull) | position (integer, notNull)
 ```
 
-`db/seed.ts` inserts three decks with 6–10 cards each so the deployed app is never empty when someone opens it. It must be idempotent — truncate before insert — and it loads `.env.local` explicitly since it runs outside Next.js:
+`db/seed.ts` inserts three decks with 6–10 cards each so the deployed app is never empty when someone opens it. It must be idempotent — truncate before insert — and it needs `.env.local` loaded before any module evaluates, since it runs outside Next.js.
 
-```ts
-import { config } from 'dotenv';
-config({ path: '.env.local' });
+Load it with Node's `--env-file` flag, not an in-file `dotenv` call:
+
+```json
+"seed": "tsx --env-file=.env.local db/seed.ts"
 ```
 
-Wire it as `"seed": "tsx db/seed.ts"`. It is run **manually, from my laptop, against the remote Neon database.** Never as part of a build.
+Calling `config({ path: '.env.local' })` at the top of `seed.ts` does **not** work: ES imports are hoisted, so `lib/db.ts` evaluates — and calls `neon(process.env.DATABASE_URL!)` with `undefined` — before that line ever runs. `--env-file` populates the environment before module evaluation begins, so hoisting can't defeat it.
+
+`drizzle.config.ts` is different and may keep using `dotenv`, because it reads `process.env.DATABASE_URL` inside the `defineConfig({...})` call rather than at import time.
+
+The seed is run **manually, from my laptop, against the remote Neon database.** Never as part of a build.
 
 ---
 
